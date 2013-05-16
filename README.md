@@ -51,5 +51,5 @@ Output formats of ASvX:
 
 
 Note:
-	Works with Python 2.x, with python-ecdsa
+	Works with Python 2.x, without dependencies
 	The leading byte is the first byte of Bitcoin signatures, ie something between 27 and 34

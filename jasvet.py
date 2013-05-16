@@ -13,13 +13,16 @@ import time
 import hashlib
 import random
 import base64
-import ecdsa
-from ecdsa import der
-from ecdsa import numbertheory, ellipticcurve, util
 
 FTVerbose=False
 
 
+
+def randomk():  #better make it stronger
+	rk=0
+	for i in range(8):
+		rk=long(random.random()*0xffffffff)<<(32*i)
+	return rk
 
 # Common constants/functions for Bitcoin
 	
@@ -276,10 +279,11 @@ def str_to_long(b):
 	return res
     
 class Public_key( object ):
-	def __init__( self, generator, point ):
+	def __init__( self, generator, point, c ):
 		self.curve = generator.curve()
 		self.generator = generator
 		self.point = point
+		self.compressed = c
 		n = generator.order()
 		if not n:
 			raise RuntimeError, "Generator point must have order."
@@ -288,7 +292,9 @@ class Public_key( object ):
 		if point.x() < 0 or n <= point.x() or point.y() < 0 or n <= point.y():
 			raise RuntimeError, "Generator point has x or y out of range."
 
-	def verifies( self, hash, signature ):
+	def verify( self, hash, signature ):
+		if isinstance(hash, str):
+			hash=str_to_long(hash)
 		G = self.generator
 		n = G.order()
 		r = signature.r
@@ -302,20 +308,44 @@ class Public_key( object ):
 		v = xy.x() % n
 		return v == r
 
+	def ser(self):
+		if self.compressed:
+			if self.point.y() & 1:
+				key = '03' + '%064x' % self.point.x()
+			else:
+				key = '02' + '%064x' % self.point.x()
+		else:
+			key = '04' + \
+				'%064x' % self.point.x() + \
+				'%064x' % self.point.y()
+
+		return key.decode('hex')
+		
+
+class Signature( object ):
+	def __init__( self, r, s ):
+		self.r = r
+		self.s = s
+
+	def ser(self):
+		return ("%064x%064x"%(self.r,self.s)).decode('hex')
+        
 class Private_key( object ):
 	def __init__( self, public_key, secret_multiplier ):
 		self.public_key = public_key
 		self.secret_multiplier = secret_multiplier
 
-	def der( self ):
-		hex_der_key = '06052b8104000a30740201010420' + \
-			'%064x' % self.secret_multiplier + \
-			'a00706052b8104000aa14403420004' + \
-			'%064x' % self.public_key.point.x() + \
-			'%064x' % self.public_key.point.y()
-		return hex_der_key.decode('hex')
+#	def der( self ):
+#		hex_der_key = '06052b8104000a30740201010420' + \
+#			'%064x' % self.secret_multiplier + \
+#			'a00706052b8104000aa14403420004' + \
+#			'%064x' % self.public_key.point.x() + \
+#			'%064x' % self.public_key.point.y()
+#		return hex_der_key.decode('hex')
 
 	def sign( self, hash, random_k ):
+		if isinstance(hash, str):
+			hash=str_to_long(hash)
 		G = self.public_key.generator
 		n = G.order()
 		k = random_k % n
@@ -328,10 +358,10 @@ class Private_key( object ):
 		return Signature( r, s )
 
 class EC_KEY(object):
-	def __init__( self, secret ):
+	def __init__( self, secret, c=False):
 		curve = CurveFp( _p, _a, _b )
 		generator = Point( curve, _Gx, _Gy, _r )
-		self.pubkey = Public_key( generator, generator * secret )
+		self.pubkey = Public_key( generator, generator * secret, c )
 		self.privkey = Private_key( self.pubkey, secret )
 		self.secret = secret
 
@@ -351,8 +381,6 @@ _Gy = 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8L
 curve_secp256k1 = CurveFp (_p, _a, _b)
 generator_secp256k1 = g = Point (curve_secp256k1, _Gx, _Gy, _r)
 randrange = random.SystemRandom().randrange
-secp256k1 = ecdsa.curves.Curve ( "secp256k1", curve_secp256k1, generator_secp256k1, (1, 3, 132, 0, 10) )
-ecdsa.curves.curves.append (secp256k1)
 
 # Signing/verifying
 
@@ -373,7 +401,7 @@ def verify_message_Bitcoin(address, signature, message, pureECDSASigning=False):
         raise Exception("vmB","Bad signature")
 
     hb = ord(sig[0])
-    r,s = util.sigdecode_string(sig[1:], order)
+    r,s = map(str_to_long,[sig[1:33],sig[33:65]])
 
     if hb < 27 or hb >= 35:
         raise Exception("vmB","Bad first byte")
@@ -395,10 +423,9 @@ def verify_message_Bitcoin(address, signature, message, pureECDSASigning=False):
     minus_e = -e % order
     inv_r = inverse_mod(r,order)
     Q = inv_r * ( R*s + G*minus_e )
-    public_key = ecdsa.VerifyingKey.from_public_point( Q, curve = secp256k1 )
-    public_key.verify_digest( sig[1:], msg, sigdecode = ecdsa.util.sigdecode_string)
-    addr = public_key_to_bc_address(GetPubKey(public_key, compressed), networkversion)
 
+    public_key = Public_key(G, Q, compressed)
+    addr = public_key_to_bc_address(public_key.ser(), networkversion)
     if address != addr:
         raise Exception("vmB","Bad address. Signing: %s, received: %s"%(addr,address))
 
@@ -417,15 +444,14 @@ def sign_message(secret, message, pureECDSASigning=False):
 	msg=message
 	if not pureECDSASigning:
 		msg=Hash(format_msg_to_sign(message))
+	
+	eckey           = EC_KEY(str_to_long(secret), compressed)
+	private_key     = eckey.privkey
+	public_key      = eckey.pubkey
+	addr            = public_key_to_bc_address(GetPubKey(eckey,eckey.pubkey.compressed))
 
-	private_key     = GetPrivKey(pkey, compressed)
-	public_key      = GetPubKey(pkey, compressed)
-	addr            = public_key_to_bc_address(public_key)
-	signing_privkey = ecdsa.SigningKey.from_secret_exponent(int('0x'+secret.encode('hex'),16), curve=secp256k1)
-	signing_pubkey  = signing_privkey.get_verifying_key()
-
-	sig = signing_privkey.sign_digest(msg, sigencode = ecdsa.util.sigencode_string)
-	if not signing_pubkey.verify_digest(sig, msg, sigdecode = ecdsa.util.sigdecode_string):
+	sig = private_key.sign(msg, randomk())
+	if not public_key.verify(msg, sig):
 		raise Exception("sm","Problem signing message")
 	return [sig,addr,compressed,public_key]
 	
@@ -437,12 +463,12 @@ def sign_message_Bitcoin(secret, msg, pureECDSASigning=False):
 		hb=27+i
 		if compressed:
 			hb+=4
-		sign=base64.b64encode(chr(hb)+sig)
+		sign=base64.b64encode(chr(hb)+sig.ser())
 		try:
 			verify_message_Bitcoin(addr, sign, msg, pureECDSASigning)
-			return {'address':addr, 'b64-signature':sign, 'signature':chr(hb)+sig, 'message':msg}
+			return {'address':addr, 'b64-signature':sign, 'signature':chr(hb)+sig.ser(), 'message':msg}
 		except Exception as e:
-			#print e.args
+#			print e.args
 			pass
 
 	raise Exception("smB","Unable to construct recoverable key")
