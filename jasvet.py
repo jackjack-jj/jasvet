@@ -21,7 +21,7 @@ FTVerbose=False
 def randomk():  #better make it stronger
 	rk=0
 	for i in range(8):
-		rk=long(random.random()*0xffffffff)<<(32*i)
+		rk = rk | long(random.random()*0xffffffff)<<(32*i)
 	return rk
 
 # Common constants/functions for Bitcoin
