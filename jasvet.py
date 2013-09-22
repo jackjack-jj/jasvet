@@ -6,7 +6,7 @@
 #   - Bitcoin base64 (compatible with Bitcoin)
 #   - ASCII armored, Clearsign
 #   - ASCII armored, Base64
-# 
+#
 # Licence: Public domain or CC0
 
 import time
@@ -16,7 +16,7 @@ import base64
 
 FTVerbose=False
 
-
+version='0.0.2'
 
 def randomk():  #better make it stronger
 	rk=0
@@ -25,7 +25,7 @@ def randomk():  #better make it stronger
 	return rk
 
 # Common constants/functions for Bitcoin
-	
+
 def hash_160_to_bc_address(h160, addrtype=0):
 	vh160 = chr(addrtype) + h160
 	h = Hash(vh160)
@@ -169,7 +169,7 @@ def inverse_mod( a, m ):
 	assert d == 1
 	if ud > 0: return ud
 	else: return ud + m
-	
+
 class CurveFp( object ):
 	def __init__( self, p, a, b ):
 		self.__p = p
@@ -196,7 +196,7 @@ class Point( object ):
 		self.__order = order
 		if self.__curve: assert self.__curve.contains_point( x, y )
 		if order: assert self * order == INFINITY
- 
+
 	def __add__( self, other ):
 		if other == INFINITY: return self
 		if self == INFINITY: return other
@@ -264,10 +264,10 @@ class Point( object ):
 
 	def curve( self ):
 		return self.__curve
-	
+
 	def order( self ):
 		return self.__order
-		
+
 INFINITY = Point( None, None, None )
 
 def str_to_long(b):
@@ -277,7 +277,7 @@ def str_to_long(b):
 		res += ord(a) * pos
 		pos *= 256
 	return res
-    
+
 class Public_key( object ):
 	def __init__( self, generator, point, c ):
 		self.curve = generator.curve()
@@ -320,7 +320,7 @@ class Public_key( object ):
 				'%064x' % self.point.y()
 
 		return key.decode('hex')
-		
+
 
 class Signature( object ):
 	def __init__( self, r, s ):
@@ -329,7 +329,7 @@ class Signature( object ):
 
 	def ser(self):
 		return ("%064x%064x"%(self.r,self.s)).decode('hex')
-        
+
 class Private_key( object ):
 	def __init__( self, public_key, secret_multiplier ):
 		self.public_key = public_key
@@ -370,7 +370,7 @@ def format_msg_to_sign(msg):
 
 def sqrt_mod(a, p):
     return pow(a, (p+1)/4, p)
-	
+
 _p = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2FL
 _r = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141L
 _b = 0x0000000000000000000000000000000000000000000000000000000000000007L
@@ -394,7 +394,7 @@ def verify_message_Bitcoin(address, signature, message, pureECDSASigning=False):
     curve = curve_secp256k1
     G = generator_secp256k1
     _a,_b,_p=curve.a(),curve.b(),curve.p()
-    
+
     order = G.order()
     sig = base64.b64decode(signature)
     if len(sig) != 65:
@@ -444,7 +444,7 @@ def sign_message(secret, message, pureECDSASigning=False):
 	msg=message
 	if not pureECDSASigning:
 		msg=Hash(format_msg_to_sign(message))
-	
+
 	eckey           = EC_KEY(str_to_long(secret), compressed)
 	private_key     = eckey.privkey
 	public_key      = eckey.pubkey
@@ -454,7 +454,7 @@ def sign_message(secret, message, pureECDSASigning=False):
 	if not public_key.verify(msg, sig):
 		raise Exception("sm","Problem signing message")
 	return [sig,addr,compressed,public_key]
-	
+
 
 def sign_message_Bitcoin(secret, msg, pureECDSASigning=False):
 	sig,addr,compressed,public_key=sign_message(secret, msg, pureECDSASigning)
@@ -494,10 +494,10 @@ def FormatText(t, sigctx, verbose=False):   #sigctx: False=what is displayed, Tr
 			print '  -- Signed:    '+r.encode('hex')
 		else:
 			print '  -- Displayed: '+r.encode('hex')
-	
+
 	return r
 
-	
+
 def crc24(m):
 	INIT = 0xB704CE
 	POLY = 0x1864CFB
@@ -513,7 +513,7 @@ def crc24(m):
 	for i in range(3):
 		r += chr( ( crc & (0xff<<(8*i))) >> (8*i) )
 	return r
-	
+
 def chunks(t, n):
 	return [t[i:i+n] for i in range(0, len(t), n)]
 
@@ -526,11 +526,11 @@ def ASCIIArmory(block, name):
 
 
 #==============================================
-	
+
 def verifySignature(addr, b64sig, msg):
 	return verify_message_Bitcoin(addr, b64sig, FormatText(msg, True))
 
-def ASv0(privkey, msg):	
+def ASv0(privkey, msg):
 	return sign_message_Bitcoin(privkey, FormatText(msg, True))
 
 def ASv1CS(privkey, msg):
@@ -539,41 +539,42 @@ def ASv1CS(privkey, msg):
 	r+=FormatText(msg, False)+'\r\n'
 	r+=ASCIIArmory(sig['signature'], 'BITCOIN SIGNATURE')
 	return r
-	
-def ASv1B64(privkey, msg):	
+
+def ASv1B64(privkey, msg):
 	sig=ASv0(privkey, msg)
 	return ASCIIArmory(sig['signature']+sig['message'], 'BITCOIN SIGNED MESSAGE')
-	
+
 
 
 #==============================================
 
-# 
+#
 #  Some tests with ugly output
 #  You can delete the print commands in FormatText() after testing
-# 
+#
 
-pvk1='\x01'*32
-text0='Hello world!'
-text1='Hello world!\n'
-text2='Hello world!\n\t'
-text3='Hello world!\n-jackjack'
-text4='Hello world!\n-jackjack '
-text5='Hello world!'
+if __name__=='__main__':
+	pvk1='\x01'*32
+	text0='Hello world!'
+	text1='Hello world!\n'
+	text2='Hello world!\n\t'
+	text3='Hello world!\n-jackjack'
+	text4='Hello world!\n-jackjack '
+	text5='Hello world!'
 
-FTVerbose=True
-sv0=ASv0(pvk1, text1)
-print sv0
-verifySignature(sv0['address'], sv0['b64-signature'], sv0['message'])
-print 
-print ASv1B64(pvk1, text1)
-print 
-print ASv1CS(pvk1, text1)
-print 
-print ASv1CS(pvk1, text2)
-print 
-print ASv1CS(pvk1, text3)
-print 
-print ASv1CS(pvk1, text4)
-print 
-print ASv1CS(pvk1, text5)
+	FTVerbose=True
+	sv0=ASv0(pvk1, text1)
+	print sv0
+	verifySignature(sv0['address'], sv0['b64-signature'], sv0['message'])
+	print
+	print ASv1B64(pvk1, text1)
+	print
+	print ASv1CS(pvk1, text1)
+	print
+	print ASv1CS(pvk1, text2)
+	print
+	print ASv1CS(pvk1, text3)
+	print
+	print ASv1CS(pvk1, text4)
+	print
+	print ASv1CS(pvk1, text5)
