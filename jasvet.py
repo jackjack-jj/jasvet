@@ -16,7 +16,7 @@ import base64
 
 FTVerbose=False
 
-version='0.0.2'
+version='0.0.3'
 
 def randomk():  #better make it stronger
 	rk=0
@@ -365,8 +365,28 @@ class EC_KEY(object):
 		self.privkey = Private_key( self.pubkey, secret )
 		self.secret = secret
 
+def decbin(d, l=0, rev=False):
+	if l==0:
+		a="%x"%d
+		if len(a)%2: a='0'+a
+	else:
+		a=("%0"+str(2*l)+"x")%d
+	a=a.decode('hex')
+	if rev:
+		a=a[::-1]
+	return a
+
+def decvi(d):
+	if d<0xfd:
+		return decbin(d)
+	elif d<0xffff:
+		return '\xfd'+decbin(d,2,True)
+	elif d<0xffffffff:
+		return '\xfe'+decbin(d,4,True)
+	return '\xff'+decbin(d,8,True)
+
 def format_msg_to_sign(msg):
-    return "\x18Bitcoin Signed Message:\n"+chr(len(msg))+msg  #todo: check 18
+    return "\x18Bitcoin Signed Message:\n"+decvi(len(msg))+msg
 
 def sqrt_mod(a, p):
     return pow(a, (p+1)/4, p)
